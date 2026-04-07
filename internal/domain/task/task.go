@@ -15,6 +15,7 @@ type Task struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Status      Status    `json:"status"`
+	ScheduleFor time.Time `json:"scheduled_for"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

@@ -21,22 +21,33 @@ func NewService(repo Repository) *Service {
 	}
 }
 
-func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Task, error) {
+func (s *Service) Create(ctx context.Context, input CreateInput) ([]taskdomain.Task, error) {
 	normalized, err := validateCreateInput(input)
 	if err != nil {
 		return nil, err
 	}
 
-	model := &taskdomain.Task{
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
-	}
 	now := s.now()
-	model.CreatedAt = now
-	model.UpdatedAt = now
 
-	created, err := s.repo.Create(ctx, model)
+	dates, err := buildSceduleDates(normalized, now)
+	if err != nil {
+		return nil, err
+	}
+
+	models := make([]taskdomain.Task, 0, len(dates))
+
+	for _, scheduleFor := range dates {
+		models = append(models, taskdomain.Task{
+			Title:       normalized.Title,
+			Description: normalized.Description,
+			Status:      normalized.Status,
+			ScheduleFor: scheduleFor,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		})
+	}
+
+	created, err := s.repo.Create(ctx, models)
 	if err != nil {
 		return nil, err
 	}
@@ -122,4 +133,15 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 	}
 
 	return input, nil
+}
+func buildSceduleDates(input CreateInput, now time.Time) ([]time.Time, error) {
+	if input.Recurrence != nil {
+		return input.Recurrence.NormalizedDates()
+	}
+
+	if input.ScheduleFor != nil {
+		return []time.Time{*input.ScheduleFor}, nil
+	}
+
+	return []time.Time{normalizeDate(now)}, nil
 }

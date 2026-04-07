@@ -1,15 +1,16 @@
 package handlers
 
+//Улучшен decode JSON: теперь body должен содержать ровно один JSON-объект
 import (
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
-
-	"github.com/gorilla/mux"
+	"time"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
 	taskusecase "example.com/taskservice/internal/usecase/task"
+	"github.com/gorilla/mux"
 )
 
 type TaskHandler struct {
@@ -21,23 +22,30 @@ func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
 }
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req taskMutationDTO
+	var req taskCreateDTO
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
-	})
+	input, err := req.toCreateInput()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	created, err := h.usecase.Create(r.Context(), input)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, newTaskDTO(created))
+	response := createTasksResponse{Tasks: make([]taskDTO, 0, len(created))}
+	for i := range created {
+		response.Tasks = append(response.Tasks, newTaskDTO(&created[i]))
+	}
+
+	writeJSON(w, http.StatusCreated, response)
 }
 
 func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -63,17 +71,19 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req taskMutationDTO
+	var req taskUpdateDTO
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
-	})
+	input, err := req.toUpdateInput()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	updated, err := h.usecase.Update(r.Context(), id, input)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
@@ -112,6 +122,85 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (dto taskCreateDTO) toCreateInput() (taskusecase.CreateInput, error) {
+	scheduledFor, err := parseOptionalDate(dto.ScheduledFor)
+	if err != nil {
+		return taskusecase.CreateInput{}, err
+	}
+
+	recurrence, err := dto.Recurrence.toUsecaseInput()
+	if err != nil {
+		return taskusecase.CreateInput{}, err
+	}
+
+	return taskusecase.CreateInput{
+		Title:        dto.Title,
+		Description:  dto.Description,
+		Status:       dto.Status,
+		ScheduledFor: scheduledFor,
+		Recurrence:   recurrence,
+	}, nil
+}
+
+func (dto taskUpdateDTO) toUpdateInput() (taskusecase.UpdateInput, error) {
+	scheduledFor, err := parseOptionalDate(dto.ScheduledFor)
+	if err != nil {
+		return taskusecase.UpdateInput{}, err
+	}
+
+	return taskusecase.UpdateInput{
+		Title:        dto.Title,
+		Description:  dto.Description,
+		Status:       dto.Status,
+		ScheduledFor: scheduledFor,
+	}, nil
+}
+
+func (dto *recurrenceDTO) toUsecaseInput() (*taskusecase.RecurrenceInput, error) {
+	if dto == nil {
+		return nil, nil
+	}
+
+	startDate, err := parseOptionalDate(dto.StartDate)
+	if err != nil {
+		return nil, err
+	}
+	endDate, err := parseOptionalDate(dto.EndDate)
+	if err != nil {
+		return nil, err
+	}
+
+	dates := make([]time.Time, 0, len(dto.Dates))
+	for _, rawDate := range dto.Dates {
+		date, err := time.Parse(time.DateOnly, rawDate)
+		if err != nil {
+			return nil, errors.New("invalid recurrence date, expected YYYY-MM-DD")
+		}
+		dates = append(dates, date)
+	}
+
+	return &taskusecase.RecurrenceInput{
+		Type:       dto.Type,
+		EveryNDays: dto.EveryNDays,
+		DayOfMonth: dto.DayOfMonth,
+		StartDate:  startDate,
+		EndDate:    endDate,
+		Dates:      dates,
+	}, nil
+}
+
+func parseOptionalDate(value string) (*time.Time, error) {
+	if value == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.Parse(time.DateOnly, value)
+	if err != nil {
+		return nil, errors.New("invalid date, expected YYYY-MM-DD")
+	}
+	return &parsed, nil
+}
+
 func getIDFromRequest(r *http.Request) (int64, error) {
 	rawID := mux.Vars(r)["id"]
 	if rawID == "" {
@@ -122,7 +211,6 @@ func getIDFromRequest(r *http.Request) (int64, error) {
 	if err != nil {
 		return 0, errors.New("invalid task id")
 	}
-
 	if id <= 0 {
 		return 0, errors.New("invalid task id")
 	}
@@ -137,7 +225,9 @@ func decodeJSON(r *http.Request, dst any) error {
 	if err := decoder.Decode(dst); err != nil {
 		return err
 	}
-
+	if decoder.More() {
+		return errors.New("request body must contain a single JSON object")
+	}
 	return nil
 }
 
@@ -153,14 +243,11 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
-	writeJSON(w, status, map[string]string{
-		"error": err.Error(),
-	})
+	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-
 	_ = json.NewEncoder(w).Encode(payload)
 }
