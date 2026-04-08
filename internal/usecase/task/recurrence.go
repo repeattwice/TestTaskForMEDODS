@@ -1,5 +1,6 @@
 package task
 
+//бизнес-логика recurrence и строгая валидация
 import (
 	"fmt"
 	"sort"
@@ -48,16 +49,19 @@ func (r *RecurrenceInput) NormalizedDates() ([]time.Time, error) {
 	}
 
 	var dates []time.Time
-
-	for current := start; !current.After(end); current.AddDate(0, 0, 1) {
+	for current := start; !current.After(end); current = current.AddDate(0, 0, 1) {
 		switch r.Type {
 		case RecurrenceTypeDaily:
 			diffDays := int(current.Sub(start).Hours() / 24)
 			if diffDays%r.EveryNDays == 0 {
 				dates = append(dates, current)
 			}
-		case RecurrenceTypeOddDays:
+		case RecurrenceTypeMonthly:
 			if current.Day() == r.DayOfMonth {
+				dates = append(dates, current)
+			}
+		case RecurrenceTypeOddDays:
+			if current.Day()%2 == 1 {
 				dates = append(dates, current)
 			}
 		case RecurrenceTypeEvenDays:
@@ -89,20 +93,20 @@ func (r *RecurrenceInput) normalizeSpecificDates() ([]time.Time, error) {
 	for _, date := range unique {
 		dates = append(dates, date)
 	}
-
 	sort.Slice(dates, func(i, j int) bool { return dates[i].Before(dates[j]) })
 	return dates, nil
 }
 
 func (r *RecurrenceInput) normalizedRange() (time.Time, time.Time, error) {
 	if r.StartDate == nil || r.EndDate == nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("%w: syart_date and end_date are required", ErrInvalidInput)
+		return time.Time{}, time.Time{}, fmt.Errorf("%w: start_date and end_date are required", ErrInvalidInput)
 	}
 
 	start := normalizeDate(*r.StartDate)
 	end := normalizeDate(*r.EndDate)
 	if end.Before(start) {
-		return time.Time{}, time.Time{}, fmt.Errorf("%w: start_date must be less than end_date", ErrInvalidInput)
+		return time.Time{}, time.Time{}, fmt.Errorf("%w: start_date must be less than or equal to end_date", ErrInvalidInput)
 	}
+
 	return start, end, nil
 }

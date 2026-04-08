@@ -17,7 +17,9 @@ type Service struct {
 func NewService(repo Repository) *Service {
 	return &Service{
 		repo: repo,
-		now:  func() time.Time { return time.Now().UTC() },
+		now: func() time.Time {
+			return time.Now().UTC()
+		},
 	}
 }
 
@@ -28,20 +30,18 @@ func (s *Service) Create(ctx context.Context, input CreateInput) ([]taskdomain.T
 	}
 
 	now := s.now()
-
-	dates, err := buildSceduleDates(normalized, now)
+	dates, err := buildScheduledDates(normalized, now)
 	if err != nil {
 		return nil, err
 	}
 
 	models := make([]taskdomain.Task, 0, len(dates))
-
-	for _, scheduleFor := range dates {
+	for _, scheduledFor := range dates {
 		models = append(models, taskdomain.Task{
 			Title:       normalized.Title,
 			Description: normalized.Description,
 			Status:      normalized.Status,
-			ScheduleFor: scheduleFor,
+			ScheduleFor: scheduledFor,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		})
@@ -51,7 +51,6 @@ func (s *Service) Create(ctx context.Context, input CreateInput) ([]taskdomain.T
 	if err != nil {
 		return nil, err
 	}
-
 	return created, nil
 }
 
@@ -59,7 +58,6 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*taskdomain.Task, erro
 	if id <= 0 {
 		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
 	}
-
 	return s.repo.GetByID(ctx, id)
 }
 
@@ -86,7 +84,6 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 	if err != nil {
 		return nil, err
 	}
-
 	return updated, nil
 }
 
@@ -94,7 +91,6 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return fmt.Errorf("%w: id must be positive", ErrInvalidInput)
 	}
-
 	return s.repo.Delete(ctx, id)
 }
 
@@ -113,9 +109,17 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 	if input.Status == "" {
 		input.Status = taskdomain.StatusNew
 	}
-
 	if !input.Status.Valid() {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if input.Recurrence != nil && input.ScheduleFor != nil {
+		return CreateInput{}, fmt.Errorf("%w: scheduled_for cannot be used together with recurrence", ErrInvalidInput)
+	}
+
+	if input.ScheduleFor != nil {
+		normalized := normalizeDate(*input.ScheduleFor)
+		input.ScheduleFor = &normalized
 	}
 
 	return input, nil
@@ -142,14 +146,13 @@ func validateUpdateInput(input UpdateInput, now time.Time) (UpdateInput, error) 
 
 	return input, nil
 }
-func buildSceduleDates(input CreateInput, now time.Time) ([]time.Time, error) {
+
+func buildScheduledDates(input CreateInput, now time.Time) ([]time.Time, error) {
 	if input.Recurrence != nil {
 		return input.Recurrence.NormalizedDates()
 	}
-
 	if input.ScheduleFor != nil {
 		return []time.Time{*input.ScheduleFor}, nil
 	}
-
 	return []time.Time{normalizeDate(now)}, nil
 }
