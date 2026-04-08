@@ -47,7 +47,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) ([]taskdomain.T
 		})
 	}
 
-	created, err := s.repo.Create(ctx, models)
+	created, err := s.repo.CreateMany(ctx, models)
 	if err != nil {
 		return nil, err
 	}
