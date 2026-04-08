@@ -68,7 +68,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
 	}
 
-	normalized, err := validateUpdateInput(input)
+	normalized, err := validateUpdateInput(input, s.now())
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +78,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		ScheduleFor: *normalized.ScheduleFor,
 		UpdatedAt:   s.now(),
 	}
 
@@ -120,16 +121,23 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 	return input, nil
 }
 
-func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
+func validateUpdateInput(input UpdateInput, now time.Time) (UpdateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
 
 	if input.Title == "" {
 		return UpdateInput{}, fmt.Errorf("%w: title is required", ErrInvalidInput)
 	}
-
 	if !input.Status.Valid() {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if input.ScheduleFor == nil {
+		normalized := normalizeDate(now)
+		input.ScheduleFor = &normalized
+	} else {
+		normalized := normalizeDate(*input.ScheduleFor)
+		input.ScheduleFor = &normalized
 	}
 
 	return input, nil
