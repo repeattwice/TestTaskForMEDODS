@@ -1,6 +1,5 @@
 package handlers
 
-//Улучшен decode JSON: теперь body должен содержать ровно один JSON-объект
 import (
 	"encoding/json"
 	"errors"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
+	"example.com/taskservice/internal/usecase/task"
 	taskusecase "example.com/taskservice/internal/usecase/task"
 	"github.com/gorilla/mux"
 )
@@ -133,12 +133,12 @@ func (dto taskCreateDTO) toCreateInput() (taskusecase.CreateInput, error) {
 		return taskusecase.CreateInput{}, err
 	}
 
-	return taskusecase.CreateInput{
-		Title:        dto.Title,
-		Description:  dto.Description,
-		Status:       dto.Status,
-		ScheduledFor: scheduledFor,
-		Recurrence:   recurrence,
+	return task.CreateInput{
+		Title:       dto.Title,
+		Description: dto.Description,
+		Status:      dto.Status,
+		ScheduleFor: scheduledFor,
+		Recurrence:  recurrence,
 	}, nil
 }
 
@@ -149,10 +149,10 @@ func (dto taskUpdateDTO) toUpdateInput() (taskusecase.UpdateInput, error) {
 	}
 
 	return taskusecase.UpdateInput{
-		Title:        dto.Title,
-		Description:  dto.Description,
-		Status:       dto.Status,
-		ScheduledFor: scheduledFor,
+		Title:       dto.Title,
+		Description: dto.Description,
+		Status:      dto.Status,
+		ScheduleFor: scheduledFor,
 	}, nil
 }
 
