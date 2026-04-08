@@ -19,10 +19,7 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg := loadConfig()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -49,7 +46,6 @@ func main() {
 
 	go func() {
 		<-ctx.Done()
-
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -59,7 +55,6 @@ func main() {
 	}()
 
 	logger.Info("http server started", "addr", cfg.HTTPAddr)
-
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Error("listen and serve", "error", err)
 		os.Exit(1)
@@ -88,6 +83,5 @@ func envOrDefault(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
-
 	return fallback
 }

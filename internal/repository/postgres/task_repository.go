@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 
+	taskdomain "example.com/taskservice/internal/domain/task"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	taskdomain "example.com/taskservice/internal/domain/task"
 )
 
 type Repository struct {
@@ -106,7 +105,6 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-
 	if result.RowsAffected() == 0 {
 		return taskdomain.ErrNotFound
 	}
@@ -157,6 +155,7 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 		&task.Title,
 		&task.Description,
 		&status,
+		&task.ScheduleFor,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	); err != nil {
@@ -164,6 +163,5 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	}
 
 	task.Status = taskdomain.Status(status)
-
 	return &task, nil
 }
