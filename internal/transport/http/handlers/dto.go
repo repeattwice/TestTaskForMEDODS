@@ -47,11 +47,12 @@ type createTasksResponse struct {
 
 func newTaskDTO(task *taskdomain.Task) taskDTO {
 	return taskDTO{
-		ID:          task.ID,
-		Title:       task.Title,
-		Description: task.Description,
-		Status:      task.Status,
-		CreatedAt:   task.CreatedAt,
-		UpdatedAt:   task.UpdatedAt,
+		ID:           task.ID,
+		Title:        task.Title,
+		Description:  task.Description,
+		Status:       task.Status,
+		ScheduledFor: task.ScheduleFor.Format(time.DateOnly),
+		CreatedAt:    task.CreatedAt,
+		UpdatedAt:    task.UpdatedAt,
 	}
 }
